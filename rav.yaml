@@ -1,0 +1,4 @@
+scripts:
+  notebook:
+    - .share_env\Scripts\jupyter notebook # jupyter notebook for windows
+    # - .share_env/bin/jupyter notebook # jupyter notebook for linux
