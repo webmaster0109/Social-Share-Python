@@ -3,6 +3,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
+from helpers import linkedin
+
 User = settings.AUTH_USER_MODEL
 print(User)
 
@@ -16,26 +18,50 @@ class Post(models.Model):
 
   def clean(self, *args, **kwargs):
     super().clean(*args, **kwargs)
+    if self.share_on_linkedin:
+       self.verify_can_share_on_linkedin()
+
+  def save(self, *args, **kwargs):
+    if self.share_on_linkedin:
+      self = self.perform_share_on_linkedin(save=False)
+    super().save(*args, **kwargs)
+  
+  def perform_share_on_linkedin(self, save=False):
+      self.share_on_linkedin = False
+      try:
+          linkedin.post_to_linkedin(self.user, self.content)
+      except:
+          raise ValidationError({
+              "content": "Could not share to Linkedin"
+          })
+      self.shared_at_linkedin = timezone.now()
+      if save:
+        self.save()
+      return self
+  
+  def verify_can_share_on_linkedin(self):
+    # run validation error if content is too short
     if len(self.content) < 5:
       raise ValidationError({
          "content": "Content is too short, at least 5 characters are required"
       })
-    elif self.share_on_linkedin and not self.can_share_on_linkedin:
+    # run validation errors if attempting to share on linkedin
+    if self.shared_at_linkedin:
       raise ValidationError({
-         "share_on_linkedin": "Post is already shared on linkedin"
+        "content": "Post is already shared on linkedin"
       })
-
-  def save(self, *args, **kwargs):
-    if self.share_on_linkedin and self.can_share_on_linkedin:
-        print("sharing on linkedin")
-        self.shared_at_linkedin = timezone.now()
-    else:
-        print("not sharing on linkedin")
-      
-    self.share_on_linkedin = False
-    super(Post, self).save(*args, **kwargs)
-  
-  @property
-  def can_share_on_linkedin(self):
-    return not self.shared_at_linkedin
+    
+    try:
+        # share on linkedin
+        linkedin.get_linkedin_user_details(self.user)
+    except linkedin.UserNotConnectedToLinkedin:
+        # run validation error if user is not connected
+        raise ValidationError({
+          "user": "You must connect to Linkedin before sharing to Linkedin"
+        })
+    except Exception as e:
+        # run validation error
+        raise ValidationError({
+          "user": f"Linkedin Error: {e}"
+        })
 

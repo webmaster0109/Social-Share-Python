@@ -1,11 +1,14 @@
 from django.contrib.auth import get_user_model
 import requests
 
+class UserNotConnectedToLinkedin(Exception):
+  pass
+
 def get_linkedin_user_details(user):
   try:
     linkedin_social = user.socialaccount_set.get(provider='linkedin')
   except:
-    raise Exception('Linkedin is not connected on this user.')
+    raise UserNotConnectedToLinkedin('Linkedin is not connected on this user.')
   return linkedin_social
 
 def get_share_headers(linkedin_social):
